@@ -42,29 +42,26 @@ def render(cell):
 stdout = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
 
 ### Main variables definition
-player_x = 25
-player_y = 7
-width = 40
-height = 25
+player_x = 14
+player_y = 8
+width = 30
+height = 18
 
 ### Create color code character sequences
 fg_colours = [f"{ansi_foreground(i)}" for i in range(256)]
 bg_colours = [f"{ansi_background(i)}" for i in range(256)]
-empty_cell = [[("·", 0, 236),("·", 0, 236),("·", 0, 236)],
-              [("·", 0, 236),("·", 0, 240),("·", 0, 236)],
-              [("·", 0, 236),("·", 0, 236),("·", 0, 236)]]
-player_cell = [[("▞", 0, 3),("▀", 0, 3),("▚", 0, 3)],
-               [("▌", 0, 3),("◼", 0, 11),("▐", 0, 3)],
-               [("▚", 0, 3),("▄", 0, 3),("▞", 0, 3)]]
-current_fg = -1
-current_bg = -1
+
+empty_cell = [[("█", 0, 234),("▀", 0, 234),("▀", 0, 234),("█", 0, 234)],
+              [("█", 0, 234),("▄", 0, 234),("▄", 0, 234),("█", 0, 234)]]
+player_cell = [[("▄", 0, 245),("▛", 180, 160),("▜", 180, 160),("▄", 0, 245)],
+               [("▗", 0, 130),("▛", 0, 32),("▜", 0, 32),("▖", 0, 130)]]
 
 stdout.write("\033[8;50;162t")
 time.sleep(0.5)
 
 ### Find the center of the screen
 (screen_width, screen_height) = os.get_terminal_size()
-window_left, window_top = 36, 6
+window_left, window_top = 38, 6
 
 if screen_width < 162 or screen_height < 50:
     print(f"Please scale down your terminal so you can make it 162x50 characters.\nRight now, it's {screen_width}x{screen_height}.")
@@ -82,9 +79,11 @@ clear_screen(stdout)
 enable_cursor(False, stdout)
 enable_echo(False)
 
-AsciiBuffer.from_image("RoD.png", screen_width).output(stdout, 0, 0)
+AsciiBuffer.from_image("RoD.png").output(stdout, 0, 0)
 
-stdout.write(f"{ansi_foreground(15)}{ansi_background(0)}\n\nPress any key to enter...")
+cursor_xy(69, 45, stdout)
+text_colours = f"{ansi_background(0)}{ansi_foreground(15)}"
+stdout.write(f"{text_colours}Press any key to enter...")
 
 # Wait for key press
 while keypresses == []:
@@ -102,14 +101,22 @@ while True:
     # Go back to the top left of the screen, to print over the previous output
     cursor_xy(window_left, window_top, stdout)
 
-    # Print 3x3 characters for each x,y location in the world
-    for y in range(height * 3):
-        iy = y % 3
-        for x in range(width * 3):
-            ix = x % 3
-            stdout.write(render(player_cell[iy][ix] if x // 3 == player_x and y // 3 == player_y else empty_cell[iy][ix]))
-        cursor_left(width * 3, stdout)
+    # Print 4x2 characters for each x,y location in the world
+    current_fg = -1
+    current_bg = -1
+    for y in range(height * 2):
+        iy = y % 2
+        for x in range(width * 4):
+            ix = x % 4
+            stdout.write(render(player_cell[iy][ix] if x // 4 == player_x and y // 2 == player_y else empty_cell[iy][ix]))
+        cursor_left(width * 4, stdout)
         cursor_down(1, stdout)
+
+    status_line = f"{text_colours}{player_x},{player_y} - Nothing here..."
+    status_line += "".join([" "] * (77 - len(status_line)))
+
+    cursor_xy(70, 43, stdout)
+    stdout.write(status_line)
 
     ### Wait for and read a keyboard press
     while True:
@@ -138,6 +145,8 @@ while True:
                 enable_cursor(True)
                 termios.tcflush(sys.stdin, termios.TCIOFLUSH)
                 time.sleep(0.2)
+                clear_screen(stdout)
+                cursor_home(stdout)
                 exit()
             case _:
                 continue

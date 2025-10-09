@@ -98,12 +98,13 @@ class AsciiBuffer:
         image: Image.Image = Image.open(filename)
 
         img_w, img_h = image.size
-        scalar = img_w * width_ratio / (width if width > 0 else img_w)
-        img_w = int(img_w * width_ratio / scalar)
-        img_h = int(img_h / scalar)
-        if img_h % 2 == 1:
-            img_h = img_h + 1
-        image = image.resize((img_w, img_h))
+        if width > 0 or width_ratio != 1.0:
+            scalar = img_w * width_ratio / (width if width > 0 else img_w)
+            img_w = int(img_w * width_ratio / scalar)
+            img_h = int(img_h / scalar)
+            if img_h % 2 == 1:
+                img_h = img_h + 1
+            image = image.resize((img_w, img_h))
 
         if grayscale:
             image = image.convert("L")
