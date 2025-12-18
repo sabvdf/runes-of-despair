@@ -8,21 +8,32 @@ from pynput.keyboard import Key
 
 from block_ascii_art import *
 
+old_settings = []
 
 def on_press(key):
     keypresses.append(key)
 
 def enable_echo(enable):
-    fd = sys.stdin.fileno()
-    global old_settings
-    old_settings = termios.tcgetattr(fd)
+    try:
+        fd = sys.stdin.fileno()
+        global old_settings
+        old_settings = termios.tcgetattr(fd)
 
-    if enable:
-        termios.tcsetattr(fd, termios.TCSAFLUSH, old_settings)
-    else:
-        new_settings = termios.tcgetattr(fd)
-        new_settings[3] = new_settings[3] & ~(termios.ECHO | termios.ICANON)
-        termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
+        if enable:
+            termios.tcsetattr(fd, termios.TCSAFLUSH, old_settings)
+        else:
+            new_settings = termios.tcgetattr(fd)
+            new_settings[3] = new_settings[3] & ~(termios.ECHO | termios.ICANON)
+            termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
+    except IOError:
+        pass
+
+def flush_stdin():
+    try:
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+    except IOError:
+        pass
+
 
 def render(cell):
     output = []
@@ -56,20 +67,25 @@ empty_cell = [[("█", 0, 234),("▀", 0, 234),("▀", 0, 234),("█", 0, 234)],
 player_cell = [[("▄", 0, 245),("▛", 180, 160),("▜", 180, 160),("▄", 0, 245)],
                [("▗", 0, 130),("▛", 0, 32),("▜", 0, 32),("▖", 0, 130)]]
 
-stdout.write("\033[8;50;162t")
-time.sleep(0.5)
+if not "--force" in sys.argv:
+    stdout.write("\033[8;50;162t")
+    time.sleep(0.5)
 
 ### Find the center of the screen
-(screen_width, screen_height) = os.get_terminal_size()
-window_left, window_top = 38, 6
+try:
+    screen_width, screen_height = os.get_terminal_size()
+except OSError:
+    screen_width, screen_height = 162, 50
+window_left, window_top = 37, 5
 
 if screen_width < 162 or screen_height < 50:
-    print(f"Please scale down your terminal so you can make it 162x50 characters.\nRight now, it's {screen_width}x{screen_height}.")
-    exit()
+    if not "--force" in sys.argv:
+        print(f"Sorry, Runes of Despair's semigraphics runs only on a terminal of 162x50 characters.\nPlease scale down your terminal font so you can make it display at least 162x50 characters.\nRight now, it's {screen_width}x{screen_height}.")
+        exit()
 
 ### Send keypresses to the array
 keypresses = []
-termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+flush_stdin()
 listener = keyboard.Listener(on_press=on_press)
 listener.start()
 time.sleep(0.2)
@@ -79,55 +95,66 @@ clear_screen(stdout)
 enable_cursor(False, stdout)
 enable_echo(False)
 
-AsciiBuffer.from_image("RoD.png").output(stdout, 0, 0)
+cursor_xy(screen_width // 2 - 5, screen_height // 2, stdout)
+stdout.write(f"Loading...")
 
-cursor_xy(69, 45, stdout)
+sprites = AsciiBuffer.from_image("Sprites.png", pre_scaled=True, sprite_size=(8,4))
+fire_index = 8
+tick = 0
+
+logo = AsciiBuffer.from_image("RoD.png", pre_scaled=True)
+background = AsciiBuffer.from_image("Game.png", pre_scaled=True)
+
+logo.output(stdout, 0, 0)
+
+cursor_xy(68, 44, stdout)
 text_colours = f"{ansi_background(0)}{ansi_foreground(15)}"
 stdout.write(f"{text_colours}Press any key to enter...")
 
 # Wait for key press
-while keypresses == []:
+while not keypresses:
     time.sleep(0.01)
 
 keypresses.pop(0)
 clear_screen(stdout)
 
-background = AsciiBuffer.from_image("Game.png")
 background.output(stdout, 0, 0)
 
 ### Game loop
 while True:
     ### Draw the world
-    # Go back to the top left of the screen, to print over the previous output
-    cursor_xy(window_left, window_top, stdout)
 
     # Print 4x2 characters for each x,y location in the world
     current_fg = -1
     current_bg = -1
-    for y in range(height * 2):
-        iy = y % 2
-        for x in range(width * 4):
-            ix = x % 4
-            stdout.write(render(player_cell[iy][ix] if x // 4 == player_x and y // 2 == player_y else empty_cell[iy][ix]))
-        cursor_left(width * 4, stdout)
-        cursor_down(1, stdout)
+    for y in range(height):
+        for x in range(width):
+            if x != 10 or y != 5:
+                sprites.output_sprite(stdout, window_left + x * 4, window_top + y * 2, 1 if x == player_x and y == player_y else 0)
 
     status_line = f"{text_colours}{player_x},{player_y} - Nothing here..."
     status_line += "".join([" "] * (77 - len(status_line)))
 
-    cursor_xy(70, 43, stdout)
+    cursor_xy(68, 42, stdout)
     stdout.write(status_line)
 
     ### Wait for and read a keyboard press
     while True:
-        while keypresses == []:
+        while not keypresses:
             time.sleep(0.01)
+            tick += 1
+            if tick == 3:
+                tick = 0
+                fire_index += 1
+                if fire_index > 57:
+                    fire_index = 8
+                sprites.output_sprite(stdout, 77, 15, fire_index)
 
-        input = keypresses.pop(0)
+        input_key = keypresses.pop(0)
         ### Take action based on input
-        if hasattr(input, "char"):
-            input = input.char
-        match input:
+        if hasattr(input_key, "char"):
+            input_key = input_key.char
+        match input_key:
             case Key.left:
                 if player_x > 0:
                     player_x -= 1

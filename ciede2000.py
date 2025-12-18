@@ -1,10 +1,11 @@
 import math
 import cv2
+import numpy as np
 
 
 def CIEDE2000_rgb(rgb_1, rgb_2):
-    return CIEDE2000(cv2.split(cv2.cvtColor(rgb_1, cv2.COLOR_RGB2Lab)),
-                     cv2.split(cv2.cvtColor(rgb_2, cv2.COLOR_RGB2Lab)))
+    return CIEDE2000(cv2.split(cv2.cvtColor(np.array([[[np.uint8(c) for c in rgb_1]]]), cv2.COLOR_RGB2Lab)),
+                     cv2.split(cv2.cvtColor(np.array([[[np.uint8(c) for c in rgb_2]]]), cv2.COLOR_RGB2Lab)))
 
 def CIEDE2000(Lab_1, Lab_2):
     '''Calculates CIEDE2000 color distance between two CIE L*a*b* colors'''
